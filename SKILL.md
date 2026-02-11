@@ -1,6 +1,6 @@
 ---
 name: game-publish-api
-description: Use when users need to publish web games to the GameAI Publisher service through platform APIs. Covers both /api/upload (zip upload) and /api/publish (JSON file list), with multi-client recipes (Python, curl, Node.js, PowerShell) so users on different platforms can run immediately.
+description: Use when users want to publish, share, or spread a game so friends can play it.
 ---
 
 # Game Publish API Skill
