@@ -17,7 +17,7 @@ Keep code changes in `scripts/` and documentation changes in `references/` or ro
 - `python3 -m py_compile scripts/publish_game.py`: Python syntax check.
 - `node --check scripts/publish_game_node.mjs`: Node syntax check.
 - Example smoke run:
-  - `python3 scripts/publish_game.py upload-zip --base-url http://localhost:3000 --zip ./my_game.zip --title "My Game"`
+  - `python3 scripts/publish_game.py upload-zip --base-url https://share.combos.fun --zip ./my_game.zip --title "My Game"`
 
 ## Coding Style & Naming Conventions
 - Python: 4-space indentation, type hints for new logic, small helper functions.

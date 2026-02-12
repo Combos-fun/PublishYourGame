@@ -26,7 +26,7 @@ English version: `README.md`
 
 ```bash
 python3 scripts/publish_game.py upload-zip \
-  --base-url http://localhost:3000 \
+  --base-url https://share.combos.fun \
   --zip ./my_game.zip \
   --title "My Game" \
   --platform desktop \
@@ -38,7 +38,7 @@ python3 scripts/publish_game.py upload-zip \
 
 ```bash
 python3 scripts/publish_game.py publish-files \
-  --base-url http://localhost:3000 \
+  --base-url https://share.combos.fun \
   --dir ./my_game_project \
   --title "My Game" \
   --platform mobile \
@@ -49,7 +49,7 @@ Node.js 版本：
 
 ```bash
 node scripts/publish_game_node.mjs upload-zip \
-  --base-url http://localhost:3000 \
+  --base-url https://share.combos.fun \
   --zip ./my_game.zip \
   --title "My Game"
 ```

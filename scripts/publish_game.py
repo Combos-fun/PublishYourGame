@@ -293,7 +293,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     upload = sub.add_parser("upload-zip", help="Publish from zip package via /api/upload")
-    upload.add_argument("--base-url", required=True, help="Publisher base url, e.g. http://nlb-8rcqh9faj37iiwegkc.ap-southeast-1.nlb.aliyuncsslbintl.com:3000")
+    upload.add_argument("--base-url", required=True, help="Publisher base url, e.g. https://share.combos.fun")
     upload.add_argument("--zip", required=True, help="Path to game zip file")
     upload.add_argument("--title", required=True, help="Game title")
     upload.add_argument("--description", default="", help="Game description")
@@ -324,7 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
     upload.set_defaults(func=cmd_upload_zip)
 
     publish = sub.add_parser("publish-files", help="Publish from directory via /api/publish")
-    publish.add_argument("--base-url", required=True, help="Publisher base url, e.g. http://nlb-8rcqh9faj37iiwegkc.ap-southeast-1.nlb.aliyuncsslbintl.com:3000")
+    publish.add_argument("--base-url", required=True, help="Publisher base url, e.g. https://share.combos.fun")
     publish.add_argument("--dir", required=True, help="Directory containing index.html")
     publish.add_argument("--title", required=True, help="Game title")
     publish.add_argument("--description", default="", help="Game description")
