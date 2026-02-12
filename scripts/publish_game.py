@@ -81,10 +81,7 @@ def _http_post(
 
 def _build_multipart_form(
     fields: Sequence[Tuple[str, str]],
-    file_field: str,
-    file_name: str,
-    file_bytes: bytes,
-    file_content_type: str,
+    files: Sequence[Tuple[str, str, bytes, str]],
 ) -> Tuple[bytes, str]:
     boundary = f"----GamePublishBoundary{uuid.uuid4().hex}"
     crlf = b"\r\n"
@@ -100,18 +97,19 @@ def _build_multipart_form(
             ]
         )
 
-    chunks.extend(
-        [
-            f"--{boundary}".encode("utf-8"),
-            (
-                f'Content-Disposition: form-data; name="{file_field}"; '
-                f'filename="{file_name}"'
-            ).encode("utf-8"),
-            f"Content-Type: {file_content_type}".encode("utf-8"),
-            b"",
-            file_bytes,
-        ]
-    )
+    for file_field, file_name, file_bytes, file_content_type in files:
+        chunks.extend(
+            [
+                f"--{boundary}".encode("utf-8"),
+                (
+                    f'Content-Disposition: form-data; name="{file_field}"; '
+                    f'filename="{file_name}"'
+                ).encode("utf-8"),
+                f"Content-Type: {file_content_type}".encode("utf-8"),
+                b"",
+                file_bytes,
+            ]
+        )
 
     chunks.append(f"--{boundary}--".encode("utf-8"))
     chunks.append(b"")
@@ -161,6 +159,11 @@ def _print_result(status: int, payload: Dict[str, object], response_headers: Dic
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     game_id = data.get("id") if isinstance(data, dict) else None
     game_url = data.get("gameUrl") if isinstance(data, dict) else None
+    page_url = data.get("pageUrl") if isinstance(data, dict) else None
+    share_url = data.get("shareUrl") if isinstance(data, dict) else None
+    cdn_game_url = data.get("cdnGameUrl") if isinstance(data, dict) else None
+    ownership_type = data.get("ownershipType") if isinstance(data, dict) else None
+    once_token = data.get("onceToken") if isinstance(data, dict) else None
     request_id = response_headers.get("x-request-id")
 
     print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -170,6 +173,16 @@ def _print_result(status: int, payload: Dict[str, object], response_headers: Dic
             print(f"game_id: {game_id}", file=sys.stderr)
         if game_url:
             print(f"game_url: {game_url}", file=sys.stderr)
+        if page_url:
+            print(f"page_url: {page_url}", file=sys.stderr)
+        if share_url:
+            print(f"share_url: {share_url}", file=sys.stderr)
+        if cdn_game_url:
+            print(f"cdn_game_url: {cdn_game_url}", file=sys.stderr)
+        if ownership_type:
+            print(f"ownership_type: {ownership_type}", file=sys.stderr)
+        if once_token:
+            print(f"once_token: {once_token}", file=sys.stderr)
         if request_id:
             print(f"request_id: {request_id}", file=sys.stderr)
         return 0
@@ -195,15 +208,35 @@ def cmd_upload_zip(args: argparse.Namespace) -> int:
     fields: List[Tuple[str, str]] = [("title", args.title)]
     if args.description:
         fields.append(("description", args.description))
+    fields.append(("platform", args.platform))
+    fields.append(("contentType", args.content_type))
 
     file_bytes = zip_path.read_bytes()
-    content_type = mimetypes.guess_type(zip_path.name)[0] or "application/zip"
+    zip_content_type = mimetypes.guess_type(zip_path.name)[0] or "application/zip"
+    files: List[Tuple[str, str, bytes, str]] = [
+        ("file", zip_path.name, file_bytes, zip_content_type),
+    ]
+
+    if args.cover:
+        cover_path = pathlib.Path(args.cover).expanduser().resolve()
+        if not cover_path.exists() or not cover_path.is_file():
+            print(f"cover file not found: {cover_path}", file=sys.stderr)
+            return 2
+        if cover_path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
+            print(
+                f"cover file must end with .jpg/.jpeg/.png/.webp: {cover_path.name}",
+                file=sys.stderr,
+            )
+            return 2
+        cover_bytes = cover_path.read_bytes()
+        cover_content_type = (
+            mimetypes.guess_type(cover_path.name)[0] or "application/octet-stream"
+        )
+        files.append(("cover", cover_path.name, cover_bytes, cover_content_type))
+
     body, multipart_ct = _build_multipart_form(
         fields=fields,
-        file_field="file",
-        file_name=zip_path.name,
-        file_bytes=file_bytes,
-        file_content_type=content_type,
+        files=files,
     )
 
     url = _build_endpoint(args.base_url, "/api/upload")
@@ -233,6 +266,8 @@ def cmd_publish_files(args: argparse.Namespace) -> int:
     files = _load_files_for_publish(root, prefer_text=args.prefer_text)
     payload: Dict[str, object] = {
         "title": args.title,
+        "platform": args.platform,
+        "contentType": args.content_type,
         "files": files,
     }
     if args.description:
@@ -262,6 +297,23 @@ def build_parser() -> argparse.ArgumentParser:
     upload.add_argument("--zip", required=True, help="Path to game zip file")
     upload.add_argument("--title", required=True, help="Game title")
     upload.add_argument("--description", default="", help="Game description")
+    upload.add_argument(
+        "--platform",
+        choices=["desktop", "mobile"],
+        default="desktop",
+        help="Target platform",
+    )
+    upload.add_argument(
+        "--content-type",
+        choices=["game", "code"],
+        default="game",
+        help="Content type",
+    )
+    upload.add_argument(
+        "--cover",
+        default="",
+        help="Optional cover image path (.jpg/.jpeg/.png/.webp, up to 8MB on server side)",
+    )
     upload.add_argument("--timeout", type=int, default=120, help="Request timeout seconds")
     upload.add_argument(
         "--header",
@@ -276,6 +328,18 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--dir", required=True, help="Directory containing index.html")
     publish.add_argument("--title", required=True, help="Game title")
     publish.add_argument("--description", default="", help="Game description")
+    publish.add_argument(
+        "--platform",
+        choices=["desktop", "mobile"],
+        default="desktop",
+        help="Target platform",
+    )
+    publish.add_argument(
+        "--content-type",
+        choices=["game", "code"],
+        default="game",
+        help="Content type",
+    )
     publish.add_argument("--timeout", type=int, default=120, help="Request timeout seconds")
     publish.add_argument(
         "--prefer-text",

@@ -7,8 +7,8 @@ import { randomUUID } from "node:crypto";
 function printUsage() {
   const lines = [
     "Usage:",
-    "  node publish_game_node.mjs upload-zip --base-url <url> --zip <file.zip> --title <title> [--description <desc>] [--timeout <sec>] [--header 'Key: Value']",
-    "  node publish_game_node.mjs publish-files --base-url <url> --dir <project_dir> --title <title> [--description <desc>] [--timeout <sec>] [--prefer-text] [--header 'Key: Value']",
+    "  node publish_game_node.mjs upload-zip --base-url <url> --zip <file.zip> --title <title> [--description <desc>] [--platform <desktop|mobile>] [--content-type <game|code>] [--cover <cover.jpg>] [--timeout <sec>] [--header 'Key: Value']",
+    "  node publish_game_node.mjs publish-files --base-url <url> --dir <project_dir> --title <title> [--description <desc>] [--platform <desktop|mobile>] [--content-type <game|code>] [--timeout <sec>] [--prefer-text] [--header 'Key: Value']",
   ];
   console.log(lines.join("\n"));
 }
@@ -98,6 +98,11 @@ function printResult(status, payload, responseHeaders) {
   const data = payload && typeof payload.data === "object" ? payload.data : {};
   const gameId = data?.id;
   const gameUrl = data?.gameUrl;
+  const pageUrl = data?.pageUrl;
+  const shareUrl = data?.shareUrl;
+  const cdnGameUrl = data?.cdnGameUrl;
+  const ownershipType = data?.ownershipType;
+  const onceToken = data?.onceToken;
   const requestId = responseHeaders.get("x-request-id");
 
   console.log(JSON.stringify(payload, null, 2));
@@ -105,6 +110,11 @@ function printResult(status, payload, responseHeaders) {
   if (success) {
     if (gameId) console.error(`game_id: ${gameId}`);
     if (gameUrl) console.error(`game_url: ${gameUrl}`);
+    if (pageUrl) console.error(`page_url: ${pageUrl}`);
+    if (shareUrl) console.error(`share_url: ${shareUrl}`);
+    if (cdnGameUrl) console.error(`cdn_game_url: ${cdnGameUrl}`);
+    if (ownershipType) console.error(`ownership_type: ${ownershipType}`);
+    if (onceToken) console.error(`once_token: ${onceToken}`);
     if (requestId) console.error(`request_id: ${requestId}`);
     return 0;
   }
@@ -142,6 +152,20 @@ async function collectFiles(rootDir) {
 
 function toPosixRelative(rootDir, filePath) {
   return path.relative(rootDir, filePath).split(path.sep).join("/");
+}
+
+function parseChoice(value, allowed, optionName) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (allowed.includes(normalized)) return normalized;
+  throw new Error(`${optionName} must be one of: ${allowed.join(", ")}`);
+}
+
+function coverMimeType(coverPath) {
+  const ext = path.extname(coverPath).toLowerCase();
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  return null;
 }
 
 async function loadFilesForPublish(rootDir, preferText) {
@@ -220,6 +244,13 @@ async function runUploadZip(options) {
   const zipArg = requireOption(options, "zip");
   const title = requireOption(options, "title");
   const description = options.description || "";
+  const platform = parseChoice(options.platform || "desktop", ["desktop", "mobile"], "--platform");
+  const contentType = parseChoice(
+    options["content-type"] || "game",
+    ["game", "code"],
+    "--content-type"
+  );
+  const coverArg = options.cover || "";
   const timeoutSec = Number(options.timeout || 120);
   const timeoutMs = Math.max(1, timeoutSec) * 1000;
 
@@ -238,7 +269,25 @@ async function runUploadZip(options) {
   if (description) {
     form.append("description", description);
   }
+  form.append("platform", platform);
+  form.append("contentType", contentType);
   form.append("file", new Blob([zipBytes], { type: "application/zip" }), path.basename(zipPath));
+
+  if (coverArg) {
+    const coverPath = path.resolve(coverArg);
+    const coverStat = await fs.stat(coverPath).catch(() => null);
+    if (!coverStat || !coverStat.isFile()) {
+      throw new Error(`cover file not found: ${coverPath}`);
+    }
+    const coverType = coverMimeType(coverPath);
+    if (!coverType) {
+      throw new Error(
+        `cover file must end with .jpg/.jpeg/.png/.webp: ${path.basename(coverPath)}`
+      );
+    }
+    const coverBytes = await fs.readFile(coverPath);
+    form.append("cover", new Blob([coverBytes], { type: coverType }), path.basename(coverPath));
+  }
 
   const url = endpoint(baseUrl, "/api/upload");
   const headers = parseHeaders(options.headers || []);
@@ -251,6 +300,12 @@ async function runPublishFiles(options) {
   const dirArg = requireOption(options, "dir");
   const title = requireOption(options, "title");
   const description = options.description || "";
+  const platform = parseChoice(options.platform || "desktop", ["desktop", "mobile"], "--platform");
+  const contentType = parseChoice(
+    options["content-type"] || "game",
+    ["game", "code"],
+    "--content-type"
+  );
   const timeoutSec = Number(options.timeout || 120);
   const timeoutMs = Math.max(1, timeoutSec) * 1000;
 
@@ -269,6 +324,8 @@ async function runPublishFiles(options) {
   const files = await loadFilesForPublish(rootDir, Boolean(options.preferText));
   const body = {
     title,
+    platform,
+    contentType,
     files,
     ...(description ? { description } : {}),
   };
